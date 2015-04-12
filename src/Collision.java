@@ -41,7 +41,8 @@ public class Collision {
 	// Parallel constructor
 	public Collision( int w, int b, int s, int t )
 	{
-		System.out.println("start parallel");
+		if(debug)
+			System.out.println("start parallel");
 		long startTime, endTime;
 		
 		workerBodies = new int[w + 1];
@@ -91,7 +92,8 @@ public class Collision {
 	// Sequential constructor
 	public Collision( int b, int s, int t )
 	{
-		System.out.println("start sequential");
+		if(debug)
+			System.out.println("start sequential");
 		long startTime, endTime;
 		
 		numBodies = b;
@@ -144,6 +146,9 @@ public class Collision {
 		System.exit(0);
 	}
 	
+	// This function is used to separate the number of bodies by number of workers
+	// as well as putting them into a usable array for other functions to know their
+	// bounds by each thread id
 	private void parseBodies()
 	{
 		int end = 0;
@@ -157,6 +162,8 @@ public class Collision {
 		}
 	}
 	
+	// This code would be repeated in the constructors, so we pulled it out to make
+	// the code more modular. This function writes to the output file and closes it.
 	private void endCollision() {
 		File file;
 		FileOutputStream fileOut;
@@ -186,6 +193,9 @@ public class Collision {
 		}
 	}
 	
+	// This code would be repeated in the constructors, so we pulled it out to make
+	// the code more modular. This code reads an input file and initializes points
+	// from the file, giving their initial position and velocity in terms of x and y.
 	private void readPoints() {
 		int count;
 		BufferedReader readBuffer;
@@ -261,14 +271,26 @@ public class Collision {
 
 	}*/
 	
+	// This function is for the sequential instantiation of Collision.
+	// This function defaults to use all of the bodies for calculating the forces.
 	private void calculateForces() {
 		calculateForcesHelper( 0, numBodies );
 	}
 	
+	// This function is for the parallel instantiation of Collision.
+	// This function takes the thread id and says tells the main function
+	// how many bodies to go through as well as exactly which bodies are being
+	// accounted for by this thread
 	protected void calculateForces( int num ) {
 		calculateForcesHelper( workerBodies[num], workerBodies[num + 1] );
 	}
 	
+	// This function has been changed to run through a loop from a given input
+	// rather than going from 0 to numBodies. This is because when going through
+	// the threads, we will not be going through every body in every thread when
+	// this function is called. We also did not want to just create a new function
+	// because the code would be all the same, the only difference being the beginning
+	// and end of the main loop within the function
 	private void calculateForcesHelper( int start, int num ) {
 		double distance, magnitude;
 		Point direction;
@@ -294,14 +316,26 @@ public class Collision {
 		}
 	}
 
+	// This function is for the sequential instantiation of Collision.
+	// This function defaults to use all of the bodies for moving the bodies.
 	private void moveBodies() {
 		moveBodiesHelper( 0, numBodies );
 	}
 	
+	// This function is for the parallel instantiation of Collision.
+	// This function takes the thread id and says tells the main function
+	// how many bodies to go through as well as exactly which bodies are being
+	// accounted for by this thread
 	protected void moveBodies( int num ) {
 		moveBodiesHelper( workerBodies[num], workerBodies[num + 1] );
 	}
 	
+	// This function has been changed to run through a loop from a given input
+	// rather than going from 0 to numBodies. This is because when going through
+	// the threads, we will not be going through every body in every thread when
+	// this function is called. We also did not want to just create a new function
+	// because the code would be all the same, the only difference being the beginning
+	// and end of the main loop within the function
 	private void moveBodiesHelper( int start, int num ) {
 		
 		for(int i = start; i < num; i++)
@@ -326,14 +360,26 @@ public class Collision {
 		}
 	}
 	
+	// This function is for the sequential instantiation of Collision.
+	// This function defaults to use all of the bodies for detecting collisions.
 	private void detectCollisions() {
 		detectCollisionsHelper( 0, numBodies );
 	}
 	
+	// This function is for the parallel instantiation of Collision.
+	// This function takes the thread id and says tells the main function
+	// how many bodies to go through as well as exactly which bodies are being
+	// accounted for by this thread
 	protected void detectCollisions( int num ) {
 		detectCollisionsHelper( workerBodies[num], workerBodies[num + 1] );
 	}
 
+	// This function has been changed to run through a loop from a given input
+	// rather than going from 0 to numBodies. This is because when going through
+	// the threads, we will not be going through every body in every thread when
+	// this function is called. We also did not want to just create a new function
+	// because the code would be all the same, the only difference being the beginning
+	// and end of the main loop within the function
 	private void detectCollisionsHelper( int start, int num )
 	{
 		double distance;
@@ -411,6 +457,8 @@ public class Collision {
 		bodies[b2].setXVel(v2fx);
 		bodies[b2].setYVel(v2fy);
 	}
+	
+	// All the setters and getters below. Most of these were created for CollisionWorker to work
 
 	public int getNumTimeSteps() {
 		return numTimeSteps;
