@@ -1,0 +1,8 @@
+Final Positions:
+Body 0: (1.0, 1.0)
+Body 1: (2.0, 2.0)
+Body 2: (0.0, -1.0)
+Final Velocities:
+Body 0: (1.0, 1.0)
+Body 1: (1.0, 1.0)
+Body 2: (1.0, 1.0)
