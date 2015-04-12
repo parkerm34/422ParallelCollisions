@@ -6,6 +6,7 @@ import java.io.FileOutputStream;
 import java.io.FileReader;
 import java.io.IOException;
 import java.io.OutputStreamWriter;
+import java.util.concurrent.Semaphore;
 
 public class Collision {
 	private final double G = 6.67e-11;
@@ -15,10 +16,13 @@ public class Collision {
 	private int numBodies;
 	private int bodySize;
 	private int numTimeSteps;
+	private int numWorkers;
+	private int[] workerBodies;
 	
-	private boolean debug = true;
+	public boolean debug = false;
 	int numCollisions;
-	public Body[] bodies;
+	private Body[] bodies;
+	Semaphore threadsEnd;
 		
 	public static void main(String[] args) {
 		
@@ -28,58 +32,80 @@ public class Collision {
 			usage();
 			return;
 		}
-		new Collision( Integer.parseInt(args[0]), Integer.parseInt(args[1]), Integer.parseInt(args[2]), Integer.parseInt(args[3]) );
+		if(Integer.parseInt(args[0]) == 1)
+			new Collision( Integer.parseInt(args[1]), Integer.parseInt(args[2]), Integer.parseInt(args[3]) );
+		else
+			new Collision( Integer.parseInt(args[0]), Integer.parseInt(args[1]), Integer.parseInt(args[2]), Integer.parseInt(args[3]) );
 	}
 	
+	// Parallel constructor
 	public Collision( int w, int b, int s, int t )
 	{
-		int count;
+		System.out.println("start parallel");
 		long startTime, endTime;
-		File file;
-		FileOutputStream fileOut;
-		BufferedWriter buffer;
-		BufferedReader readBuffer;
-		String currLine;
-		String[] tokens;
+		
+		workerBodies = new int[w + 1];
 		
 		numBodies = b;
 		bodySize = s;
-		numTimeSteps = t;
-		count = 0;
+		setNumTimeSteps(t);
+		numWorkers = w;
+
+		CollisionWorker[] threads = new CollisionWorker[numWorkers];
 		
-		bodies = new Body[numBodies];
-		for(int i = 0; i < numBodies; i++)
-			bodies[i] = new Body();
+		parseBodies();
 		
-		try {
-			readBuffer = new BufferedReader(new FileReader("points.dat"));
-			
-			while((currLine = readBuffer.readLine()) != null && count < numBodies)
-			{
-				tokens = currLine.split(" ");
-				bodies[count].setXPos(Double.valueOf(tokens[0]));
-				bodies[count].setYPos(Double.valueOf(tokens[1]));
-				bodies[count].setXVel(Double.valueOf(tokens[2]));
-				bodies[count].setYVel(Double.valueOf(tokens[3]));
-				bodies[count].setRadius(bodySize);
-				bodies[count].setMass(MASS);
-				count++;
-			}
-			
-		} catch (FileNotFoundException e1) {
-			System.out.println("points.dat couldnt be opened.");
-			System.exit(1);
-		} catch (IOException e) {
-			e.printStackTrace();
-			System.exit(1);
-		}
-		
+		readPoints();
+
 		numCollisions = 0;
 		endTime = 0;
 		
 		startTime = System.currentTimeMillis();
 		
-		for(int i = 0; i < numTimeSteps; i++)
+		for(int i = 0; i < numWorkers; i++)
+		{
+			threads[i] = new CollisionWorker(i, this);
+			threads[i].start();
+		}
+		
+		for(int i = 0; i < numWorkers; i++)
+		{
+			try {
+				threads[i].join();
+			} catch (InterruptedException e) {
+				e.printStackTrace();
+			}
+		}
+		
+		endTime = System.currentTimeMillis();
+		
+		endCollision();
+		
+		System.out.println("computation time: " + (endTime - startTime) / 1000 + " seconds " +
+				(endTime - startTime) % 1000 + " milliseconds");
+		System.out.println("number of collisions detected = " + numCollisions);
+		
+		System.exit(0);
+	}
+	
+	// Sequential constructor
+	public Collision( int b, int s, int t )
+	{
+		System.out.println("start sequential");
+		long startTime, endTime;
+		
+		numBodies = b;
+		bodySize = s;
+		setNumTimeSteps(t);
+		
+		readPoints();
+
+		numCollisions = 0;
+		endTime = 0;
+		
+		startTime = System.currentTimeMillis();
+		
+		for(int i = 0; i < getNumTimeSteps(); i++)
 		{
 			if(debug)
 			{
@@ -109,8 +135,35 @@ public class Collision {
 		
 		endTime = System.currentTimeMillis();
 		
-		try {
+		endCollision();
 		
+		System.out.println("computation time: " + (endTime - startTime) / 1000 + " seconds " +
+				(endTime - startTime) % 1000 + " milliseconds");
+		System.out.println("number of collisions detected = " + numCollisions);
+		
+		System.exit(0);
+	}
+	
+	private void parseBodies()
+	{
+		int end = 0;
+		workerBodies[0] = 0;
+		for(int i = 1; i < numWorkers + 1; i++)
+		{
+			end += numBodies/numWorkers;
+			if( i <= (numBodies%numWorkers) && i != 0)
+				end++;
+			workerBodies[i] = end;
+		}
+	}
+	
+	private void endCollision() {
+		File file;
+		FileOutputStream fileOut;
+		BufferedWriter buffer;
+		
+		try {
+			
 			file = new File("results.txt");
 			fileOut = new FileOutputStream(file);
 			buffer = new BufferedWriter(new OutputStreamWriter(fileOut));
@@ -131,21 +184,98 @@ public class Collision {
 			e.printStackTrace();
 			System.exit(1);
 		}
-		
-		System.out.println("computation time: " + (endTime - startTime) / 1000 + " seconds " +
-				(endTime - startTime) % 1000 + " milliseconds");
-		System.out.println("number of collisions detected = " + numCollisions);
-		
-		System.exit(0);
 	}
+	
+	private void readPoints() {
+		int count;
+		BufferedReader readBuffer;
+		String currLine;
+		String[] tokens;
+		
+		count = 0;
+		
+		bodies = new Body[numBodies];
+		for(int i = 0; i < numBodies; i++)
+			bodies[i] = new Body();
+		
+		try {
+			readBuffer = new BufferedReader(new FileReader("points.dat"));
+			
+			while((currLine = readBuffer.readLine()) != null && count < numBodies)
+			{
+				tokens = currLine.split(" ");
+				bodies[count].setXPos(Double.valueOf(tokens[0]));
+				bodies[count].setYPos(Double.valueOf(tokens[1]));
+				bodies[count].setXVel(Double.valueOf(tokens[2]));
+				bodies[count].setYVel(Double.valueOf(tokens[3]));
+				bodies[count].setRadius(bodySize);
+				bodies[count].setMass(MASS);
+				count++;
+			}
+			
+		} catch (FileNotFoundException e1) {
+			System.out.println("points.dat couldnt be opened.");
+			System.exit(1);
+		} catch (IOException e) {
+			e.printStackTrace();
+			System.exit(1);
+		}
+	}
+	
+	private void barrier( int worker ) {
+		
+	}
+	
+/*	private void worker( int worker ) {
+		for(int i = 0; i < getNumTimeSteps(); i++)
+		{
+			if(debug)
+			{
+				System.out.println("Before TR " + i + ": Number of collisions: " + numCollisions);
+				for(int j = workerBodies[worker]; j < workerBodies[worker + 1]; j++)
+				{
+					System.out.println("Body: " + j);
+					System.out.println(" - Before move: xPos: " + bodies[j].getXPos() + " yPos: " + bodies[j].getYPos());
+					System.out.println(" - Before move: xVel: " + bodies[j].getXVel() + " yVel: " + bodies[j].getYVel());
+				}
+			}
+			
+			calculateForces( worker );
+			barrier( worker );
+			moveBodies( worker );
+			barrier( worker );
+			detectCollisions( worker );
+			barrier( worker );
+			
+			if(debug)
+			{
+				for(int j = workerBodies[worker]; j < workerBodies[worker + 1]; j++)
+				{
+					System.out.println("Body: " + j);
+					System.out.println(" - After move: xPos: " + bodies[j].getXPos() + " yPos: " + bodies[j].getYPos());
+					System.out.println(" - After move: xVel: " + bodies[j].getXVel() + " yVel: " + bodies[j].getYVel());
+				}
+				System.out.println();
+			}
+		}
 
+	}*/
+	
 	private void calculateForces() {
+		calculateForcesHelper( 0, numBodies );
+	}
+	
+	protected void calculateForces( int num ) {
+		calculateForcesHelper( workerBodies[num], workerBodies[num + 1] );
+	}
+	
+	private void calculateForcesHelper( int start, int num ) {
 		double distance, magnitude;
 		Point direction;
 		
-		for(int i = 0; i < numBodies - 1; i++)
+		for(int i = start; i < num - 1; i++)
 		{
-			for(int j = i + 1; j < numBodies; j++)
+			for(int j = i + 1; j < num; j++)
 			{
 				distance = Math.sqrt((bodies[i].getXPos() - bodies[j].getXPos()) * 
 						 (bodies[i].getXPos() - bodies[j].getXPos()) +
@@ -165,8 +295,16 @@ public class Collision {
 	}
 
 	private void moveBodies() {
+		moveBodiesHelper( 0, numBodies );
+	}
+	
+	protected void moveBodies( int num ) {
+		moveBodiesHelper( workerBodies[num], workerBodies[num + 1] );
+	}
+	
+	private void moveBodiesHelper( int start, int num ) {
 		
-		for(int i = 0; i < numBodies; i++)
+		for(int i = start; i < num; i++)
 		{
 			Point deltaV;
 			Point deltaP;
@@ -188,13 +326,21 @@ public class Collision {
 		}
 	}
 	
-	private void detectCollisions()
+	private void detectCollisions() {
+		detectCollisionsHelper( 0, numBodies );
+	}
+	
+	protected void detectCollisions( int num ) {
+		detectCollisionsHelper( workerBodies[num], workerBodies[num + 1] );
+	}
+
+	private void detectCollisionsHelper( int start, int num )
 	{
 		double distance;
 		
-		for(int i = 0; i < numBodies - 1; i++)
+		for(int i = start; i < num - 1; i++)
 		{
-			for(int j = i + 1; j < numBodies; j++)
+			for(int j = i + 1; j < num; j++)
 			{
 				distance = Math.sqrt((bodies[i].getXPos() - bodies[j].getXPos()) *
 						(bodies[i].getXPos() - bodies[j].getXPos()) +
@@ -264,6 +410,82 @@ public class Collision {
 		bodies[b1].setYVel(v1fy);
 		bodies[b2].setXVel(v2fx);
 		bodies[b2].setYVel(v2fy);
+	}
+
+	public int getNumTimeSteps() {
+		return numTimeSteps;
+	}
+
+	public void setNumTimeSteps(int numTimeSteps) {
+		this.numTimeSteps = numTimeSteps;
+	}
+
+	public int getNumBodies() {
+		return numBodies;
+	}
+
+	public void setNumBodies(int numBodies) {
+		this.numBodies = numBodies;
+	}
+
+	public int getBodySize() {
+		return bodySize;
+	}
+
+	public void setBodySize(int bodySize) {
+		this.bodySize = bodySize;
+	}
+
+	public int getNumWorkers() {
+		return numWorkers;
+	}
+
+	public void setNumWorkers(int numWorkers) {
+		this.numWorkers = numWorkers;
+	}
+
+	public int[] getWorkerBodies() {
+		return workerBodies;
+	}
+
+	public void setWorkerBodies(int[] workerBodies) {
+		this.workerBodies = workerBodies;
+	}
+
+	public boolean isDebug() {
+		return debug;
+	}
+
+	public void setDebug(boolean debug) {
+		this.debug = debug;
+	}
+
+	public int getNumCollisions() {
+		return numCollisions;
+	}
+
+	public void setNumCollisions(int numCollisions) {
+		this.numCollisions = numCollisions;
+	}
+
+	public Body[] getBodies() {
+		return bodies;
+	}
+
+	public void setBodies(Body[] bodies) {
+		this.bodies = bodies;
+	}
+
+	public double getG() {
+		return G;
+	}
+
+	public double getDT() {
+		return DT;
+	}
+
+	public double getMASS() {
+		return MASS;
 	}
 
 	public static void usage()
