@@ -1,24 +1,22 @@
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.FileReader;
 import java.io.IOException;
 import java.io.OutputStreamWriter;
 
-
 public class Collision {
+	private final double G = 6.67e-11;
+	private final double DT = 0.01f;
+	private final double MASS = 1.0f;
+	
 	private int numBodies;
 	private int bodySize;
 	private int numTimeSteps;
-	private double DT = 1.0f;
-	private double mass = 1.0f;
 	
-	private boolean debug = false;
-	
-	final double G = 6.67e-11;
+	private boolean debug = true;
 	int numCollisions;
 	public Body[] bodies;
 		
@@ -35,56 +33,46 @@ public class Collision {
 	
 	public Collision( int w, int b, int s, int t )
 	{
+		int count;
 		long startTime, endTime;
 		File file;
 		FileOutputStream fileOut;
 		BufferedWriter buffer;
-		
 		BufferedReader readBuffer;
 		String currLine;
-		
+		String[] tokens;
 		
 		numBodies = b;
 		bodySize = s;
 		numTimeSteps = t;
+		count = 0;
+		
+		bodies = new Body[numBodies];
+		for(int i = 0; i < numBodies; i++)
+			bodies[i] = new Body();
 		
 		try {
 			readBuffer = new BufferedReader(new FileReader("points.dat"));
 			
-			if((currLine = readBuffer.readLine()) != null)
+			while((currLine = readBuffer.readLine()) != null && count < numBodies)
 			{
-				int count = 0;
-				String[] tokens;
-				numBodies = Integer.parseInt(currLine);
-				bodies = new Body[numBodies];
-				for(int i = 0; i < numBodies; i++)
-					bodies[i] = new Body();
-
-				while((currLine = readBuffer.readLine()) != null)
-				{
-					tokens = currLine.split(" ");
-					bodies[count].setXPos(Double.valueOf(tokens[0]));
-					bodies[count].setYPos(Double.valueOf(tokens[1]));
-					bodies[count].setXVel(Double.valueOf(tokens[2]));
-					bodies[count].setYVel(Double.valueOf(tokens[3]));
-					bodies[count].setRadius(bodySize);
-					bodies[count].setMass(mass);
-					count++;
-				}
-			}
-			else
-			{
-				bodies = new Body[numBodies];
-				for(int i = 0; i < numBodies; i++)
-					bodies[i] = new Body();
-
+				tokens = currLine.split(" ");
+				bodies[count].setXPos(Double.valueOf(tokens[0]));
+				bodies[count].setYPos(Double.valueOf(tokens[1]));
+				bodies[count].setXVel(Double.valueOf(tokens[2]));
+				bodies[count].setYVel(Double.valueOf(tokens[3]));
+				bodies[count].setRadius(bodySize);
+				bodies[count].setMass(MASS);
+				count++;
 			}
 			
 		} catch (FileNotFoundException e1) {
 			System.out.println("points.dat couldnt be opened.");
+			System.exit(1);
 		} catch (IOException e) {
+			e.printStackTrace();
+			System.exit(1);
 		}
-		
 		
 		numCollisions = 0;
 		endTime = 0;
@@ -93,8 +81,30 @@ public class Collision {
 		
 		for(int i = 0; i < numTimeSteps; i++)
 		{
+			if(debug)
+			{
+				System.out.println("Before TR " + i + ": Number of collisions: " + numCollisions);
+				for(int j = 0; j < numBodies; j++)
+				{
+					System.out.println("Body: " + j);
+					System.out.println(" - Before move: xPos: " + bodies[j].getXPos() + " yPos: " + bodies[j].getYPos());
+					System.out.println(" - Before move: xVel: " + bodies[j].getXVel() + " yVel: " + bodies[j].getYVel());
+				}
+			}
 			calculateForces();
 			moveBodies();
+			detectCollisions();
+			
+			if(debug)
+			{
+				for(int j = 0; j < numBodies; j++)
+				{
+					System.out.println("Body: " + j);
+					System.out.println(" - After move: xPos: " + bodies[j].getXPos() + " yPos: " + bodies[j].getYPos());
+					System.out.println(" - After move: xVel: " + bodies[j].getXVel() + " yVel: " + bodies[j].getYVel());
+				}
+				System.out.println();
+			}
 		}
 		
 		endTime = System.currentTimeMillis();
@@ -107,11 +117,13 @@ public class Collision {
 			
 			buffer.write("Final Positions:\n");
 			for(int i = 0; i < numBodies; i++)
-				buffer.write("Body " + i + ": (" + bodies[i].getXPos() + ", " + bodies[i].getYPos() +")\n");
+				buffer.write("Body " + i + ": (" + String.format("%.4f", bodies[i].getXPos()) + ", " + 
+						String.format("%.4f", bodies[i].getYPos()) + ")\n");
 			
-			buffer.write("Final Velocities:\n");
+			buffer.write("\nFinal Velocities:\n");
 			for(int i = 0; i < numBodies; i++)
-				buffer.write("Body " + i + ": (" + bodies[i].getXVel() + ", " + bodies[i].getYVel() +")\n");
+				buffer.write("Body " + i + ": (" + String.format("%.4f", bodies[i].getXVel()) + ", " +
+						String.format("%.4f", bodies[i].getYVel()) + ")\n");
 				
 			buffer.close();
 			
@@ -125,31 +137,135 @@ public class Collision {
 		System.out.println("number of collisions detected = " + numCollisions);
 		
 		System.exit(0);
+	}
+
+	private void calculateForces() {
+		double distance, magnitude;
+		Point direction;
 		
+		for(int i = 0; i < numBodies - 1; i++)
+		{
+			for(int j = i + 1; j < numBodies; j++)
+			{
+				distance = Math.sqrt((bodies[i].getXPos() - bodies[j].getXPos()) * 
+						 (bodies[i].getXPos() - bodies[j].getXPos()) +
+						 (bodies[i].getYPos() - bodies[j].getYPos()) *
+						 (bodies[i].getYPos() - bodies[j].getYPos()));
+				
+				magnitude = G * bodies[i].getMass() * bodies[j].getMass() / (distance * distance);
+				direction = new Point(bodies[j].getXPos() - bodies[i].getXPos(),
+						bodies[j].getYPos() - bodies[i].getYPos());
+				
+				bodies[i].setXForce(bodies[i].getXForce() + magnitude * direction.x / distance);
+				bodies[j].setXForce(bodies[j].getXForce() - magnitude * direction.x / distance);
+				bodies[i].setYForce(bodies[i].getYForce() + magnitude * direction.y / distance);
+				bodies[j].setYForce(bodies[j].getYForce() - magnitude * direction.y / distance);
+			}
+		}
 	}
 
 	private void moveBodies() {
 		
 		for(int i = 0; i < numBodies; i++)
 		{
-			System.out.println("x: " + bodies[i].getXPos() + " y: " + bodies[i].getYPos());
-			bodies[i].setXPos(bodies[i].getXPos() + (bodies[i].getXVel() * DT));
-			bodies[i].setYPos(bodies[i].getYPos() + (bodies[i].getYVel() * DT));
-			if(debug)
-				System.out.println("x: " + bodies[i].getXPos() + " y: " + bodies[i].getYPos() + "\n");
+			Point deltaV;
+			Point deltaP;
+			
+			deltaV = new Point(bodies[i].getXForce() / bodies[i].getMass() * DT,
+					bodies[i].getYForce() / bodies[i].getMass() * DT);
+			deltaP = new Point( (bodies[i].getXVel() + deltaV.x / 2) * DT,
+					(bodies[i].getYVel() + deltaV.y / 2) * DT);
+			
+			bodies[i].setXVel(bodies[i].getXVel() + deltaV.x);
+			bodies[i].setYVel(bodies[i].getYVel() + deltaV.y);
+			
+			bodies[i].setXPos(bodies[i].getXPos() + deltaP.x);
+			bodies[i].setYPos(bodies[i].getYPos() + deltaP.y);
+			
+			// reset force vector
+			bodies[i].setXForce(0);
+			bodies[i].setYForce(0);
 		}
 	}
-
-	private void calculateForces() {
-/*			int j = i + 1;
-		distance = Math.sqrt((bodies[i].getXPos() - bodies[j].getXPos()) * 
-							 (bodies[i].getXPos() - bodies[j].getXPos()) +
-							 (bodies[i].getYPos() - bodies[j].getYPos()) *
-							 (bodies[i].getYPos() - bodies[j].getYPos()));
-*/			//more
+	
+	private void detectCollisions()
+	{
+		double distance;
+		
+		for(int i = 0; i < numBodies - 1; i++)
+		{
+			for(int j = i + 1; j < numBodies; j++)
+			{
+				distance = Math.sqrt((bodies[i].getXPos() - bodies[j].getXPos()) *
+						(bodies[i].getXPos() - bodies[j].getXPos()) +
+						(bodies[i].getYPos() - bodies[j].getYPos()) *
+						(bodies[i].getYPos() - bodies[j].getYPos()));
+				
+				if( distance <= (bodies[i].getRadius() + bodies[j].getRadius()) )
+				{
+					ResolveCollision(i, j);
+					numCollisions++;
+				}
+			}
+		}
 		
 	}
 	
+	private void ResolveCollision(int b1, int b2) {
+		double distSquared;
+		double v1fx, v1fy, v2fx, v2fy;
+		double v1nfxNumerator, v1txNumerator, v2nfxNumerator, v2txNumerator;
+		double v1nfyNumerator, v1tyNumerator, v2nfyNumerator, v2tyNumerator;
+		double diffXPos, diffYPos;
+		
+		// dist = b1.r + b2.r
+		distSquared = (bodies[b1].getRadius() + bodies[b2].getRadius()) * 
+				(bodies[b1].getRadius() + bodies[b2].getRadius());
+		
+		// x2 - x1
+		diffXPos = bodies[b2].getXPos() - bodies[b1].getXPos();
+		// y2 - y1
+		diffYPos = bodies[b2].getYPos() - bodies[b1].getYPos();
+		
+		// Find final normal and tangent vectors for Body 1's x
+		v1nfxNumerator = bodies[b2].getXVel() * diffXPos * diffXPos +
+				bodies[b2].getYVel() * diffXPos * diffYPos;
+		v1txNumerator = bodies[b1].getXVel() * diffYPos * diffYPos -
+				bodies[b1].getYVel() * diffXPos * diffYPos;
+		// Find the final total x vector for Body 1
+		v1fx = (v1nfxNumerator + v1txNumerator) / distSquared;
+		
+		// Find final normal and tangent y vectors for Body 1
+		v1nfyNumerator = bodies[b2].getXVel() * diffXPos * diffYPos +
+				bodies[b2].getYVel() * diffYPos * diffYPos;
+		v1tyNumerator = -(bodies[b1].getXVel() * diffYPos * diffXPos) +
+				bodies[b1].getYVel() * diffXPos * diffXPos;
+		// Find the final total y vector for Body 1
+		v1fy = (v1nfyNumerator + v1tyNumerator) / distSquared;
+		
+		// Find final normal and tangent x vectors for Body 2
+		v2nfxNumerator = bodies[b1].getXVel() * diffXPos * diffXPos +
+				bodies[b1].getYVel() * diffXPos * diffYPos;
+		v2txNumerator = bodies[b2].getXVel() * diffYPos * diffYPos -
+				bodies[b2].getYVel() * diffXPos * diffYPos;
+		// Find the final total x vector for Body 1
+		v2fx = (v2nfxNumerator + v2txNumerator) / distSquared;
+		
+		// Find final normal and tangent y vectors for Body 2
+		v2nfyNumerator = bodies[b1].getXVel() * diffXPos * diffYPos +
+				bodies[b1].getYVel() * diffYPos * diffYPos;
+		v2tyNumerator = -(bodies[b2].getXVel() * diffYPos * diffXPos) +
+				bodies[b2].getYVel() * diffXPos * diffXPos;
+		// Find the final total y vector for Body 1
+		v2fy = (v2nfyNumerator + v2tyNumerator) / distSquared;
+		
+		// Update the final velocities
+		bodies[b1].setXVel(v1fx);
+		bodies[b1].setYVel(v1fy);
+		bodies[b2].setXVel(v2fx);
+		bodies[b2].setYVel(v2fy);
+	}
+
 	public static void usage()
 	{
 		System.out.println("Collisions Usage\n");
