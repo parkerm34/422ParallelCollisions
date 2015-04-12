@@ -1,0 +1,8 @@
+GITHUB TUTORIAL
+================
+
+Setup steps
+-----------
+- Go into directory where you want to store the project (eclipse workspace)
+- type "git init" (without quotes)
+- input the following command with URL
