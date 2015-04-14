@@ -30,7 +30,7 @@ public class CollisionController {
 			if( Integer.parseInt(args[4]) == 1)
 				graphicsFlag = true;
 		}
-		
+				
 		init();
 	}
 	
@@ -40,6 +40,9 @@ public class CollisionController {
 		else
 			col = new Collision( Integer.parseInt(startArgs[0]), Integer.parseInt(startArgs[1]), Integer.parseInt(startArgs[2]), Integer.parseInt(startArgs[3]), graphicsFlag );
 
+		if(startArgs.length == 6)
+			col.csv = true;
+		
 		if(graphicsFlag)
 		{
 			gui = new CollisionGUI(Integer.parseInt(startArgs[1]), col, startArgs);

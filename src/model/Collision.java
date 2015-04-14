@@ -25,16 +25,19 @@ public class Collision {
 	
 	public boolean guiFlag = false;
 	public boolean debug = false;
+	public boolean csv = false;
 	int numCollisions;
 	private Body[] bodies;
 	Semaphore threadsEnd;
+	
+	private File output;
 			
 	// Parallel constructor
 	public Collision( int w, int b, int s, int t, boolean guiFlag )
 	{
 		if(debug)
 			System.out.println("start parallel");
-		
+			
 		this.guiFlag = guiFlag;
 		workerBodies = new int[w + 1];
 		
@@ -55,7 +58,7 @@ public class Collision {
 	{
 		if(debug)
 			System.out.println("start sequential");
-		
+			
 		this.guiFlag = guiFlag;
 		numBodies = b;
 		bodySize = s;
@@ -99,7 +102,31 @@ public class Collision {
 		System.out.println("computation time: " + (endTime - startTime) / 1000 + " seconds " +
 				(endTime - startTime) % 1000 + " milliseconds");
 		System.out.println("number of collisions detected = " + numCollisions);
-		
+		if(csv)
+		{
+			long seconds = (endTime - startTime) / 1000;
+			long millis = (endTime - startTime) % 1000;
+			
+			FileOutputStream tempOut;
+			BufferedWriter bufferOut;
+			
+			try {
+				
+				output = new File("output.txt");
+				tempOut = new FileOutputStream(output);
+				bufferOut = new BufferedWriter(new OutputStreamWriter(tempOut));
+				
+				bufferOut.write(seconds + "," + millis + "\n");
+				
+				bufferOut.close();
+				
+			} catch (IOException e) {
+				e.printStackTrace();
+				System.exit(1);
+			}
+			
+		}
+			
 //		System.exit(0);
 	}
 	
@@ -146,12 +173,33 @@ public class Collision {
 		
 		endTime = System.currentTimeMillis();
 		
-		endCollision();
-//		gui.updateCircles();
 		System.out.println("computation time: " + (endTime - startTime) / 1000 + " seconds " +
 				(endTime - startTime) % 1000 + " milliseconds");
 		System.out.println("number of collisions detected = " + numCollisions);
-		
+		if(csv)
+		{
+			long seconds = (endTime - startTime) / 1000;
+			long millis = (endTime - startTime) % 1000;
+			
+			FileOutputStream tempOut;
+			BufferedWriter bufferOut;
+			
+			try {
+				
+				output = new File("output.txt");
+				tempOut = new FileOutputStream(output);
+				bufferOut = new BufferedWriter(new OutputStreamWriter(tempOut));
+				
+				bufferOut.write(seconds + "," + millis + "\n");
+				
+				bufferOut.close();
+				
+			} catch (IOException e) {
+				e.printStackTrace();
+				System.exit(1);
+			}
+			
+		}
 //		System.exit(0);
 	}
 	
