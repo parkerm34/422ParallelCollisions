@@ -15,12 +15,12 @@ public class CollisionGUI extends JFrame {
 	private Collision collision;
 	private Body[] bodies;
 	private CircleBody[] circles;
-	private OptionGUI option;
+	public OptionGUI option;
 	
-	private int ANIMATIONTIME = 5;
+	protected int ANIMATIONTIME = 100;
 	private int SIZE = 750;
 	
-	public CollisionGUI( int numBodies, Collision col) {
+	public CollisionGUI( int numBodies, Collision col, String[] args) {
 		this.collision = col;
 		layoutGUI();
 		option = new OptionGUI(this);
@@ -30,7 +30,6 @@ public class CollisionGUI extends JFrame {
 		setTitle("2D Collisions");
 	    setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 	    setBackground(Color.BLUE);
-		//this.setSize(800, 800);
 	    
 	    drawPanel = new JPanel();
 	    
@@ -58,16 +57,16 @@ public class CollisionGUI extends JFrame {
         this.add(drawPanel);
 		setMinimumSize(new Dimension(SIZE, SIZE));
 		setVisible(true);
-		
-//		super.repaint();
 	}
 	
 	public void updateCircles() {
-		try {
-			Thread.sleep(ANIMATIONTIME);
-		} catch (InterruptedException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
+		if(ANIMATIONTIME > 0)
+		{
+			try {
+				Thread.sleep(ANIMATIONTIME);
+			} catch (InterruptedException e) {
+				e.printStackTrace();
+			}
 		}
 	    double xCoord = 100;
         double yCoord = 100;
@@ -91,4 +90,5 @@ public class CollisionGUI extends JFrame {
 	public void updateAnimation( int time ) {
 		ANIMATIONTIME = time;
 	}
+	
 }

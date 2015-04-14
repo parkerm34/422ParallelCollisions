@@ -42,7 +42,8 @@ public class CollisionWorker extends Thread {
 			parent.detectCollisions( id );
 			barrier( id );
 			
-			parent.gui.updateCircles();
+			if(parent.guiFlag)
+				parent.gui.updateCircles();
 
 			
 			if(parent.debug)

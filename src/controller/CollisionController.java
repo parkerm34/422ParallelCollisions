@@ -7,25 +7,45 @@ public class CollisionController {
 
 	public static CollisionGUI gui;
 	public static Collision col;
+	public static String[] startArgs;
+	public static boolean graphicsFlag = false;
 	
 	public static void main( String[] args ) {
-	
-		if( args.length != 4 )
+		startArgs = args;
+		startCollisionGUI( );
+	}
+	public static void startCollisionGUI( ) {
+
+		String[] args = startArgs;
+		
+		if( args.length < 4 )
 		{
 			System.out.println("Too few arguments: 4 are required, " + args.length + " were given.");
 			Collision.usage();
 			return;
 		}
 		
+		if( args.length == 5 )
+		{
+			if( Integer.parseInt(args[4]) == 1)
+				graphicsFlag = true;
+		}
 		
-		if(Integer.parseInt(args[0]) == 1)
-			col = new Collision( Integer.parseInt(args[1]), Integer.parseInt(args[2]), Integer.parseInt(args[3]) );
+		init();
+	}
+	
+	public static void init() {
+		if(Integer.parseInt(startArgs[0]) == 1)
+			col = new Collision( Integer.parseInt(startArgs[1]), Integer.parseInt(startArgs[2]), Integer.parseInt(startArgs[3]), graphicsFlag );
 		else
-			col = new Collision( Integer.parseInt(args[0]), Integer.parseInt(args[1]), Integer.parseInt(args[2]), Integer.parseInt(args[3]) );
+			col = new Collision( Integer.parseInt(startArgs[0]), Integer.parseInt(startArgs[1]), Integer.parseInt(startArgs[2]), Integer.parseInt(startArgs[3]), graphicsFlag );
 
-		gui = new CollisionGUI(Integer.parseInt(args[1]), col);
+		if(graphicsFlag)
+		{
+			gui = new CollisionGUI(Integer.parseInt(startArgs[1]), col, startArgs);
+		}
 
-		if(Integer.parseInt(args[0]) == 1)
+		if(Integer.parseInt(startArgs[0]) == 1)
 			col.sequentialStart( gui );
 		else
 			col.parallelStart( gui );

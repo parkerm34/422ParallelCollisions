@@ -23,17 +23,19 @@ public class Collision {
 	private int[] workerBodies;
 	protected CollisionGUI gui;
 	
+	public boolean guiFlag = false;
 	public boolean debug = false;
 	int numCollisions;
 	private Body[] bodies;
 	Semaphore threadsEnd;
 			
 	// Parallel constructor
-	public Collision( int w, int b, int s, int t )
+	public Collision( int w, int b, int s, int t, boolean guiFlag )
 	{
 		if(debug)
 			System.out.println("start parallel");
 		
+		this.guiFlag = guiFlag;
 		workerBodies = new int[w + 1];
 		
 		numBodies = b;
@@ -49,11 +51,12 @@ public class Collision {
 	}
 	
 	// Sequential constructor
-	public Collision( int b, int s, int t )
+	public Collision( int b, int s, int t, boolean guiFlag )
 	{
 		if(debug)
 			System.out.println("start sequential");
 		
+		this.guiFlag = guiFlag;
 		numBodies = b;
 		bodySize = s;
 		setNumTimeSteps(t);
@@ -61,13 +64,12 @@ public class Collision {
 		readPoints();
 
 		numCollisions = 0;
-		
-
 	}
 	
 	public void parallelStart( CollisionGUI gui ) {
 		long startTime, endTime;
-		this.gui = gui;
+		if(guiFlag)
+			this.gui = gui;
 		
 		endTime = 0;
 
@@ -103,7 +105,8 @@ public class Collision {
 	
 	public void sequentialStart( CollisionGUI gui ) {
 		long startTime, endTime;
-		this.gui = gui;
+		if(guiFlag)
+			this.gui = gui;
 		
 		endTime = 0;
 		startTime = 0;
@@ -126,7 +129,8 @@ public class Collision {
 			calculateForces();
 			moveBodies();
 			detectCollisions();
-			this.gui.updateCircles();
+			if(guiFlag)
+				this.gui.updateCircles();
 			
 			if(debug)
 			{
@@ -150,6 +154,8 @@ public class Collision {
 		
 //		System.exit(0);
 	}
+	
+	
 	
 	// This function is used to separate the number of bodies by number of workers
 	// as well as putting them into a usable array for other functions to know their
@@ -544,11 +550,12 @@ public class Collision {
 	public static void usage()
 	{
 		System.out.println("Collisions Usage\n");
-		System.out.println("\tjava Collision w b s t\n");
+		System.out.println("\tjava Collision w b s t [g]\n");
 		System.out.println("\tw - Number of workers, 1 to 16. Ignored by sequential program.");
 		System.out.println("\tb - number of bodies.");
 		System.out.println("\ts - size of each body.");
-		System.out.println("\tt - number of time steps.");		
+		System.out.println("\tt - number of time steps.");	
+		System.out.println("\tg - to use the gui, set to 1.");	
 	}
 	
 }
