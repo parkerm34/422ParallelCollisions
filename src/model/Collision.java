@@ -16,41 +16,46 @@ public class Collision {
 	private final double DT = 0.01f;
 	private final double MASS = 1.0f;
 	
+	private int numCollisions;
 	private int numBodies;
 	private int bodySize;
 	private int numTimeSteps;
 	private int numWorkers;
-	private int[] workerBodies;
+	private int[][] workerBodies;
+	private Body[] bodies;
 	protected CollisionGUI gui;
 	
+	private int numArrived;
+	private Semaphore mutex;
+	private Semaphore[] barrier;
+	
+	private File output;
 	public boolean guiFlag = false;
 	public boolean debug = false;
 	public boolean csv = false;
-	int numCollisions;
-	private Body[] bodies;
-	Semaphore threadsEnd;
-	
-	private File output;
 			
 	// Parallel constructor
-	public Collision( int w, int b, int s, int t, boolean guiFlag )
+	public Collision( int w, int b, int s, int t, boolean guiFlag)
 	{
 		if(debug)
 			System.out.println("start parallel");
-			
-		this.guiFlag = guiFlag;
-		workerBodies = new int[w + 1];
-		
+
+		numWorkers = w;
 		numBodies = b;
 		bodySize = s;
-		setNumTimeSteps(t);
-		numWorkers = w;
+		numTimeSteps = t;
+		this.guiFlag = guiFlag;
+		workerBodies = new int[w][];
+		numCollisions = 0;
+		numArrived = 1;
+		barrier = new Semaphore[3];
+		barrier[0] = new Semaphore(0);
+		barrier[1] = new Semaphore(0);
+		barrier[2] = new Semaphore(0);
+		mutex = new Semaphore(1);
 		
 		parseBodies();
-		
 		readPoints();
-
-		numCollisions = 0;
 	}
 	
 	// Sequential constructor
@@ -58,33 +63,37 @@ public class Collision {
 	{
 		if(debug)
 			System.out.println("start sequential");
-			
-		this.guiFlag = guiFlag;
+		
 		numBodies = b;
 		bodySize = s;
-		setNumTimeSteps(t);
+		numTimeSteps = t;
+		this.guiFlag = guiFlag;
+		workerBodies = new int[1][b];
+		numCollisions = 0;
+		
+		for(int i = 0; i < b; i ++)
+			workerBodies[0][i] = i;
 		
 		readPoints();
-
-		numCollisions = 0;
 	}
 	
 	public void parallelStart( CollisionGUI gui ) {
 		long startTime, endTime;
+		long seconds, millis;
+		
 		if(guiFlag)
 			this.gui = gui;
 		
 		endTime = 0;
 
 		CollisionWorker[] threads = new CollisionWorker[numWorkers];
-		
+		for(int i = 0; i < numWorkers; i++)
+			threads[i] = new CollisionWorker(i, this);
+
 		startTime = System.currentTimeMillis();
 		
 		for(int i = 0; i < numWorkers; i++)
-		{
-			threads[i] = new CollisionWorker(i, this);
 			threads[i].start();
-		}
 		
 		for(int i = 0; i < numWorkers; i++)
 		{
@@ -99,14 +108,15 @@ public class Collision {
 		
 		endCollision();
 		
-		System.out.println("computation time: " + (endTime - startTime) / 1000 + " seconds " +
-				(endTime - startTime) % 1000 + " milliseconds");
+		seconds = (endTime - startTime) / 1000;
+		millis = (endTime - startTime) % 1000;
+		
+		System.out.println("computation time: " + seconds + " seconds " +
+				millis + " milliseconds");
 		System.out.println("number of collisions detected = " + numCollisions);
+		
 		if(csv)
-		{
-			long seconds = (endTime - startTime) / 1000;
-			long millis = (endTime - startTime) % 1000;
-			
+		{	
 			FileOutputStream tempOut;
 			BufferedWriter bufferOut;
 			
@@ -126,12 +136,15 @@ public class Collision {
 			}
 			
 		}
-			
-//		System.exit(0);
+		
+		if(!guiFlag)
+			System.exit(0);
 	}
 	
 	public void sequentialStart( CollisionGUI gui ) {
 		long startTime, endTime;
+		long seconds, millis;
+		
 		if(guiFlag)
 			this.gui = gui;
 		
@@ -173,14 +186,15 @@ public class Collision {
 		
 		endTime = System.currentTimeMillis();
 		
-		System.out.println("computation time: " + (endTime - startTime) / 1000 + " seconds " +
-				(endTime - startTime) % 1000 + " milliseconds");
+		seconds = (endTime - startTime) / 1000;
+		millis = (endTime - startTime) % 1000;
+		
+		System.out.println("computation time: " + seconds + " seconds " +
+				millis + " milliseconds");
 		System.out.println("number of collisions detected = " + numCollisions);
+		
 		if(csv)
-		{
-			long seconds = (endTime - startTime) / 1000;
-			long millis = (endTime - startTime) % 1000;
-			
+		{	
 			FileOutputStream tempOut;
 			BufferedWriter bufferOut;
 			
@@ -200,24 +214,38 @@ public class Collision {
 			}
 			
 		}
-//		System.exit(0);
+		
+		if(!guiFlag)
+			System.exit(0);
 	}
 	
 	
 	
-	// This function is used to separate the number of bodies by number of workers
-	// as well as putting them into a usable array for other functions to know their
-	// bounds by each thread id
+	// This function is used to separate the bodies via reverse striping into the workers
 	private void parseBodies()
 	{
-		int end = 0;
-		workerBodies[0] = 0;
-		for(int i = 1; i < numWorkers + 1; i++)
+		int curr;
+		int division = numBodies / numWorkers;
+		boolean iterateFirst = division % 2 == 0;
+		
+		for(int i = 0; i < numWorkers; i++)
 		{
-			end += numBodies/numWorkers;
-			if( i <= (numBodies%numWorkers) && i != 0)
-				end++;
-			workerBodies[i] = end;
+			if(iterateFirst && i < numBodies % numWorkers)
+				workerBodies[i] = new int[division + 1];
+			else if(!iterateFirst && i >= (numWorkers - numBodies % numWorkers))
+					workerBodies[i] = new int[division + 1];
+			else
+				workerBodies[i] = new int[division];
+		}
+		
+		for(int i = 0; i < numWorkers; i++)
+		{
+			curr = 0;
+			for(int j = 0; j < workerBodies[i].length; j++)
+			{
+				workerBodies[i][j] = curr + (j % 2 == 0 ? i : numWorkers - (i + 1));
+				curr += numWorkers;
+			}
 		}
 	}
 	
@@ -291,49 +319,10 @@ public class Collision {
 		}
 	}
 	
-	private void barrier( int worker ) {
-		
-	}
-	
-/*	private void worker( int worker ) {
-		for(int i = 0; i < getNumTimeSteps(); i++)
-		{
-			if(debug)
-			{
-				System.out.println("Before TR " + i + ": Number of collisions: " + numCollisions);
-				for(int j = workerBodies[worker]; j < workerBodies[worker + 1]; j++)
-				{
-					System.out.println("Body: " + j);
-					System.out.println(" - Before move: xPos: " + bodies[j].getXPos() + " yPos: " + bodies[j].getYPos());
-					System.out.println(" - Before move: xVel: " + bodies[j].getXVel() + " yVel: " + bodies[j].getYVel());
-				}
-			}
-			
-			calculateForces( worker );
-			barrier( worker );
-			moveBodies( worker );
-			barrier( worker );
-			detectCollisions( worker );
-			barrier( worker );
-			
-			if(debug)
-			{
-				for(int j = workerBodies[worker]; j < workerBodies[worker + 1]; j++)
-				{
-					System.out.println("Body: " + j);
-					System.out.println(" - After move: xPos: " + bodies[j].getXPos() + " yPos: " + bodies[j].getYPos());
-					System.out.println(" - After move: xVel: " + bodies[j].getXVel() + " yVel: " + bodies[j].getYVel());
-				}
-				System.out.println();
-			}
-		}
-
-	}*/
-	
 	// This function is for the sequential instantiation of Collision.
 	// This function defaults to use all of the bodies for calculating the forces.
 	private void calculateForces() {
-		calculateForcesHelper( 0, numBodies );
+		calculateForcesHelper( 0 );
 	}
 	
 	// This function is for the parallel instantiation of Collision.
@@ -341,7 +330,7 @@ public class Collision {
 	// how many bodies to go through as well as exactly which bodies are being
 	// accounted for by this thread
 	protected void calculateForces( int num ) {
-		calculateForcesHelper( workerBodies[num], workerBodies[num + 1] );
+		calculateForcesHelper( num );
 	}
 	
 	// This function has been changed to run through a loop from a given input
@@ -350,26 +339,28 @@ public class Collision {
 	// this function is called. We also did not want to just create a new function
 	// because the code would be all the same, the only difference being the beginning
 	// and end of the main loop within the function
-	private void calculateForcesHelper( int start, int num ) {
+	private void calculateForcesHelper( int num ) {
 		double distance, magnitude;
 		Point direction;
+		int body;
 		
-		for(int i = start; i < num - 1; i++)
+		for(int i = 0; i < workerBodies[num].length; i++)
 		{
-			for(int j = i + 1; j < num; j++)
+			body = workerBodies[num][i];
+			for(int j = body + 1; j < numBodies; j++)
 			{
-				distance = Math.sqrt((bodies[i].getXPos() - bodies[j].getXPos()) * 
-						 (bodies[i].getXPos() - bodies[j].getXPos()) +
-						 (bodies[i].getYPos() - bodies[j].getYPos()) *
-						 (bodies[i].getYPos() - bodies[j].getYPos()));
+				distance = Math.sqrt((bodies[body].getXPos() - bodies[j].getXPos()) * 
+						 (bodies[body].getXPos() - bodies[j].getXPos()) +
+						 (bodies[body].getYPos() - bodies[j].getYPos()) *
+						 (bodies[body].getYPos() - bodies[j].getYPos()));
 				
-				magnitude = G * bodies[i].getMass() * bodies[j].getMass() / (distance * distance);
-				direction = new Point(bodies[j].getXPos() - bodies[i].getXPos(),
-						bodies[j].getYPos() - bodies[i].getYPos());
+				magnitude = G * bodies[body].getMass() * bodies[j].getMass() / (distance * distance);
+				direction = new Point(bodies[j].getXPos() - bodies[body].getXPos(),
+						bodies[j].getYPos() - bodies[body].getYPos());
 				
-				bodies[i].setXForce(bodies[i].getXForce() + magnitude * direction.x / distance);
+				bodies[body].setXForce(bodies[body].getXForce() + magnitude * direction.x / distance);
 				bodies[j].setXForce(bodies[j].getXForce() - magnitude * direction.x / distance);
-				bodies[i].setYForce(bodies[i].getYForce() + magnitude * direction.y / distance);
+				bodies[body].setYForce(bodies[body].getYForce() + magnitude * direction.y / distance);
 				bodies[j].setYForce(bodies[j].getYForce() - magnitude * direction.y / distance);
 			}
 		}
@@ -378,7 +369,7 @@ public class Collision {
 	// This function is for the sequential instantiation of Collision.
 	// This function defaults to use all of the bodies for moving the bodies.
 	private void moveBodies() {
-		moveBodiesHelper( 0, numBodies );
+		moveBodiesHelper( 0 );
 	}
 	
 	// This function is for the parallel instantiation of Collision.
@@ -386,7 +377,7 @@ public class Collision {
 	// how many bodies to go through as well as exactly which bodies are being
 	// accounted for by this thread
 	protected void moveBodies( int num ) {
-		moveBodiesHelper( workerBodies[num], workerBodies[num + 1] );
+		moveBodiesHelper( num );
 	}
 	
 	// This function has been changed to run through a loop from a given input
@@ -395,34 +386,37 @@ public class Collision {
 	// this function is called. We also did not want to just create a new function
 	// because the code would be all the same, the only difference being the beginning
 	// and end of the main loop within the function
-	private void moveBodiesHelper( int start, int num ) {
+	private void moveBodiesHelper( int num ) {
+		int body;
 		
-		for(int i = start; i < num; i++)
+		for(int i = 0; i < workerBodies[num].length; i++)
 		{
+			body = workerBodies[num][i];
+			
 			Point deltaV;
 			Point deltaP;
 			
-			deltaV = new Point(bodies[i].getXForce() / bodies[i].getMass() * DT,
-					bodies[i].getYForce() / bodies[i].getMass() * DT);
-			deltaP = new Point( (bodies[i].getXVel() + deltaV.x / 2) * DT,
-					(bodies[i].getYVel() + deltaV.y / 2) * DT);
+			deltaV = new Point(bodies[body].getXForce() / bodies[body].getMass() * DT,
+					bodies[body].getYForce() / bodies[body].getMass() * DT);
+			deltaP = new Point( (bodies[body].getXVel() + deltaV.x / 2) * DT,
+					(bodies[body].getYVel() + deltaV.y / 2) * DT);
 			
-			bodies[i].setXVel(bodies[i].getXVel() + deltaV.x);
-			bodies[i].setYVel(bodies[i].getYVel() + deltaV.y);
+			bodies[body].setXVel(bodies[body].getXVel() + deltaV.x);
+			bodies[body].setYVel(bodies[body].getYVel() + deltaV.y);
 			
-			bodies[i].setXPos(bodies[i].getXPos() + deltaP.x);
-			bodies[i].setYPos(bodies[i].getYPos() + deltaP.y);
+			bodies[body].setXPos(bodies[body].getXPos() + deltaP.x);
+			bodies[body].setYPos(bodies[body].getYPos() + deltaP.y);
 			
 			// reset force vector
-			bodies[i].setXForce(0);
-			bodies[i].setYForce(0);
+			bodies[body].setXForce(0);
+			bodies[body].setYForce(0);
 		}
 	}
 	
 	// This function is for the sequential instantiation of Collision.
 	// This function defaults to use all of the bodies for detecting collisions.
 	private void detectCollisions() {
-		detectCollisionsHelper( 0, numBodies );
+		detectCollisionsHelper( 0 );
 	}
 	
 	// This function is for the parallel instantiation of Collision.
@@ -430,7 +424,7 @@ public class Collision {
 	// how many bodies to go through as well as exactly which bodies are being
 	// accounted for by this thread
 	protected void detectCollisions( int num ) {
-		detectCollisionsHelper( workerBodies[num], workerBodies[num + 1] );
+		detectCollisionsHelper( num );
 	}
 
 	// This function has been changed to run through a loop from a given input
@@ -439,22 +433,24 @@ public class Collision {
 	// this function is called. We also did not want to just create a new function
 	// because the code would be all the same, the only difference being the beginning
 	// and end of the main loop within the function
-	private void detectCollisionsHelper( int start, int num )
+	private void detectCollisionsHelper( int num )
 	{
 		double distance;
+		int body;
 		
-		for(int i = start; i < num - 1; i++)
+		for(int i = 0; i < workerBodies[num].length; i++)
 		{
-			for(int j = i + 1; j < num; j++)
+			body = workerBodies[num][i];
+			for(int j = body + 1; j < numBodies; j++)
 			{
-				distance = Math.sqrt((bodies[i].getXPos() - bodies[j].getXPos()) *
-						(bodies[i].getXPos() - bodies[j].getXPos()) +
-						(bodies[i].getYPos() - bodies[j].getYPos()) *
-						(bodies[i].getYPos() - bodies[j].getYPos()));
+				distance = Math.sqrt((bodies[body].getXPos() - bodies[j].getXPos()) *
+						(bodies[body].getXPos() - bodies[j].getXPos()) +
+						(bodies[body].getYPos() - bodies[j].getYPos()) *
+						(bodies[body].getYPos() - bodies[j].getYPos()));
 				
-				if( distance <= (bodies[i].getRadius() + bodies[j].getRadius()) )
+				if( distance <= (bodies[body].getRadius() + bodies[j].getRadius()) )
 				{
-					ResolveCollision(i, j);
+					ResolveCollision(body, j);
 					numCollisions++;
 				}
 			}
@@ -551,11 +547,11 @@ public class Collision {
 		this.numWorkers = numWorkers;
 	}
 
-	public int[] getWorkerBodies() {
+	public int[][] getWorkerBodies() {
 		return workerBodies;
 	}
 
-	public void setWorkerBodies(int[] workerBodies) {
+	public void setWorkerBodies(int[][] workerBodies) {
 		this.workerBodies = workerBodies;
 	}
 
@@ -567,6 +563,22 @@ public class Collision {
 		this.debug = debug;
 	}
 
+	public boolean isGuiFlag() {
+		return guiFlag;
+	}
+	
+	public void setIsGuiFlag(boolean guiFlag) {
+		this.guiFlag = guiFlag;
+	}
+	
+	public boolean isCSV() {
+		return csv;
+	}
+
+	public void setCSV(boolean csv) {
+		this.csv = csv;
+	}
+	
 	public int getNumCollisions() {
 		return numCollisions;
 	}
@@ -583,6 +595,38 @@ public class Collision {
 		this.bodies = bodies;
 	}
 
+	public int getNumArrived() {
+		return numArrived;
+	}
+
+	public void setNumArrived(int numArrived) {
+		this.numArrived = numArrived;
+	}
+
+	public void aquireMutex() {
+		try {
+			mutex.acquire();
+		} catch (InterruptedException e) {
+			e.printStackTrace();
+		}
+	}
+
+	public void releaseMutex() {
+		mutex.release();
+	}
+
+	public void acquireBarrier(int barrierIndex) {
+		try {
+			barrier[barrierIndex].acquire();
+		} catch (InterruptedException e) {
+			e.printStackTrace();
+		}
+	}
+
+	public void releaseAllBarrier(int barrierIndex) {
+		barrier[barrierIndex].release(numWorkers - 1);
+	}
+
 	public double getG() {
 		return G;
 	}
@@ -594,16 +638,14 @@ public class Collision {
 	public double getMASS() {
 		return MASS;
 	}
-
+	
 	public static void usage()
 	{
 		System.out.println("Collisions Usage\n");
-		System.out.println("\tjava Collision w b s t [g]\n");
+		System.out.println("\tjava Collision w b s t\n");
 		System.out.println("\tw - Number of workers, 1 to 16. Ignored by sequential program.");
 		System.out.println("\tb - number of bodies.");
 		System.out.println("\ts - size of each body.");
-		System.out.println("\tt - number of time steps.");	
-		System.out.println("\tg - to use the gui, set to 1.");	
+		System.out.println("\tt - number of time steps.");		
 	}
-	
 }
