@@ -18,7 +18,7 @@ public class OptionGUI extends JFrame implements ChangeListener {
 	private JPanel optionPanel;
 	private int SLOWEST = 150;
 	private int FASTEST = 0;
-	private int INIT = 75;
+	private int INIT = SLOWEST/2;
 	private int SPACING = SLOWEST/6;
 	private JSlider speed = new JSlider(JSlider.HORIZONTAL, FASTEST, SLOWEST, INIT);
 	public String[] args;
@@ -39,7 +39,7 @@ public class OptionGUI extends JFrame implements ChangeListener {
 	    speed.setMajorTickSpacing( SPACING );
 	    speed.setPaintTicks(true);
 	    
-	    Hashtable<Integer, JLabel> labelTable = new Hashtable<Integer, JLabel>();
+	    Hashtable labelTable = new Hashtable();
 	    labelTable.put( new Integer( FASTEST ), new JLabel("Slow") );
 	    labelTable.put( new Integer( SLOWEST ), new JLabel("Fast") );
 	    speed.setLabelTable( labelTable );

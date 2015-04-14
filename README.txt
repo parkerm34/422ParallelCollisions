@@ -1,3 +1,15 @@
+IMPORTANT UPDATE ON HOW TO RUN JAVA IMPLEMENTATION
+==================================================
+make CollisionController
+java -cp bin controller.CollisionController
+
+This is because java has weird command line dependencies when using packages
+just copy and past this line and it will work.
+
+
+
+
+
 GITHUB TUTORIAL
 ================
 
