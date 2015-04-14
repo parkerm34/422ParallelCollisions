@@ -1,3 +1,4 @@
+package model;
 import java.util.concurrent.Semaphore;
 
 
@@ -40,6 +41,9 @@ public class CollisionWorker extends Thread {
 			barrier( id );
 			parent.detectCollisions( id );
 			barrier( id );
+			
+			parent.gui.updateCircles();
+
 			
 			if(parent.debug)
 			{

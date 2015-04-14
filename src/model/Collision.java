@@ -1,3 +1,4 @@
+package model;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.File;
@@ -7,6 +8,8 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.io.OutputStreamWriter;
 import java.util.concurrent.Semaphore;
+
+import view.CollisionGUI;
 
 public class Collision {
 	private final double G = 6.67e-11;
@@ -18,32 +21,18 @@ public class Collision {
 	private int numTimeSteps;
 	private int numWorkers;
 	private int[] workerBodies;
+	protected CollisionGUI gui;
 	
 	public boolean debug = false;
 	int numCollisions;
 	private Body[] bodies;
 	Semaphore threadsEnd;
-		
-	public static void main(String[] args) {
-		
-		if( args.length != 4 )
-		{
-			System.out.println("Too few arguments: 4 are required, " + args.length + " were given.");
-			usage();
-			return;
-		}
-		if(Integer.parseInt(args[0]) == 1)
-			new Collision( Integer.parseInt(args[1]), Integer.parseInt(args[2]), Integer.parseInt(args[3]) );
-		else
-			new Collision( Integer.parseInt(args[0]), Integer.parseInt(args[1]), Integer.parseInt(args[2]), Integer.parseInt(args[3]) );
-	}
-	
+			
 	// Parallel constructor
 	public Collision( int w, int b, int s, int t )
 	{
 		if(debug)
 			System.out.println("start parallel");
-		long startTime, endTime;
 		
 		workerBodies = new int[w + 1];
 		
@@ -51,15 +40,38 @@ public class Collision {
 		bodySize = s;
 		setNumTimeSteps(t);
 		numWorkers = w;
-
-		CollisionWorker[] threads = new CollisionWorker[numWorkers];
 		
 		parseBodies();
 		
 		readPoints();
 
 		numCollisions = 0;
+	}
+	
+	// Sequential constructor
+	public Collision( int b, int s, int t )
+	{
+		if(debug)
+			System.out.println("start sequential");
+		
+		numBodies = b;
+		bodySize = s;
+		setNumTimeSteps(t);
+		
+		readPoints();
+
+		numCollisions = 0;
+		
+
+	}
+	
+	public void parallelStart( CollisionGUI gui ) {
+		long startTime, endTime;
+		this.gui = gui;
+		
 		endTime = 0;
+
+		CollisionWorker[] threads = new CollisionWorker[numWorkers];
 		
 		startTime = System.currentTimeMillis();
 		
@@ -86,24 +98,15 @@ public class Collision {
 				(endTime - startTime) % 1000 + " milliseconds");
 		System.out.println("number of collisions detected = " + numCollisions);
 		
-		System.exit(0);
+//		System.exit(0);
 	}
 	
-	// Sequential constructor
-	public Collision( int b, int s, int t )
-	{
-		if(debug)
-			System.out.println("start sequential");
+	public void sequentialStart( CollisionGUI gui ) {
 		long startTime, endTime;
+		this.gui = gui;
 		
-		numBodies = b;
-		bodySize = s;
-		setNumTimeSteps(t);
-		
-		readPoints();
-
-		numCollisions = 0;
 		endTime = 0;
+		startTime = 0;
 		
 		startTime = System.currentTimeMillis();
 		
@@ -119,9 +122,11 @@ public class Collision {
 					System.out.println(" - Before move: xVel: " + bodies[j].getXVel() + " yVel: " + bodies[j].getYVel());
 				}
 			}
+			
 			calculateForces();
 			moveBodies();
 			detectCollisions();
+			this.gui.updateCircles();
 			
 			if(debug)
 			{
@@ -138,12 +143,12 @@ public class Collision {
 		endTime = System.currentTimeMillis();
 		
 		endCollision();
-		
+//		gui.updateCircles();
 		System.out.println("computation time: " + (endTime - startTime) / 1000 + " seconds " +
 				(endTime - startTime) % 1000 + " milliseconds");
 		System.out.println("number of collisions detected = " + numCollisions);
 		
-		System.exit(0);
+//		System.exit(0);
 	}
 	
 	// This function is used to separate the number of bodies by number of workers
