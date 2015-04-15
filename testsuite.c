@@ -76,16 +76,16 @@ int main( int argc, char *argv[] )
 
 	system("make clean");
 	system("make CollisionController");
-//	system("make Collision");
+	system("make Collision");
 
 	fprintf( outFile, " , , , ,Java,Java");
-//	if( gui != 1 )
-//		fprintf( outFile, ",C,C");
+	if( gui != 1 )
+		fprintf( outFile, ",C,C");
 	fprintf( outFile, "\n");
 
 	fprintf( outFile, "Threads,Bodies,Size,TimeSteps,Seconds,Milliseconds");
-//	if( gui != 1 )
-//		fprintf( outFile, ",Seconds,Milliseconds");
+	if( gui != 1 )
+		fprintf( outFile, ",Seconds,Milliseconds");
 	fprintf( outFile, "\n");
 
 	while(count < cases)
@@ -101,7 +101,7 @@ int main( int argc, char *argv[] )
 		helpFile = fopen("output.txt", "r");
 		fscanf(helpFile, "%s", helper);
 		fprintf( outFile, "%s", helper);
-/*
+
 		if( gui != 1 )
 		{
 			printf("\n++++++++ C TEST CASE %d ++++++++\n", count);
@@ -112,7 +112,7 @@ int main( int argc, char *argv[] )
 			fscanf(helpFile2, "%s", helper);
 			fprintf( outFile, "%s", helper);
 		}
-*/		fprintf( outFile, "\n");
+		fprintf( outFile, "\n");
 
 		printf("\n----**** END TEST CASE %d ****----\n", count);
 		count++;
