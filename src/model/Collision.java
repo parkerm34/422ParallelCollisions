@@ -18,7 +18,7 @@ public class Collision {
 	
 	private int numCollisions;
 	private int numBodies;
-	private int bodySize;
+	private double bodySize;
 	private int numTimeSteps;
 	private int numWorkers;
 	private int[][] workerBodies;
@@ -35,7 +35,7 @@ public class Collision {
 	public boolean csv = false;
 			
 	// Parallel constructor
-	public Collision( int w, int b, int s, int t, boolean guiFlag)
+	public Collision( int w, int b, double s, int t, boolean guiFlag)
 	{
 		if(debug)
 			System.out.println("start parallel");
@@ -59,7 +59,7 @@ public class Collision {
 	}
 	
 	// Sequential constructor
-	public Collision( int b, int s, int t, boolean guiFlag )
+	public Collision( int b, double s, int t, boolean guiFlag )
 	{
 		if(debug)
 			System.out.println("start sequential");
@@ -531,7 +531,7 @@ public class Collision {
 		this.numBodies = numBodies;
 	}
 
-	public int getBodySize() {
+	public double getBodySize() {
 		return bodySize;
 	}
 

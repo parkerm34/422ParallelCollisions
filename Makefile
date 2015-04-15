@@ -1,14 +1,14 @@
 CC=gcc
 
-LDFLAGS=-lpthread 
+LDFLAGS=-lpthread -lm 
 
 CFLAGS=-Wall -g -std=gnu99 -o
 
-#Collision.o: Collision.c
-#	$(CC) Collision.c $(LDFLAGS) $(CFLAGS) -c
+Collision.o: Collision.c
+	$(CC) Collision.c $(LDFLAGS) $(CFLAGS) -c
 
-#Collision: Collision.c
-#	$(CC) $(CFLAGS) Collision Collision.c $(LDFLAGS)
+Collision: Collision.c
+	$(CC) $(CFLAGS) Collision Collision.c $(LDFLAGS)
 
 CollisionController: src/controller/*.java src/model/*.java src/view/*.java
 	javac -d bin src/controller/*.java src/model/*.java src/view/*.java -classpath bin
@@ -20,6 +20,6 @@ clean:
 	rm -rf Collision.o Collision testsuite testsuite.dSYM
 
 all:
-#	$(CC) $(CFLAGS) Collision Collision.c $(LDFLAGS)
+	$(CC) $(CFLAGS) Collision Collision.c $(LDFLAGS)
 	$(CC) $(CFLAGS) testsuite testsuite.c
 	javac -d bin src/controller/*.java src/model/*.java src/view/*.java -classpath bin
